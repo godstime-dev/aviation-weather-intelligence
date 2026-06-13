@@ -1,14 +1,9 @@
 import logging
 import psycopg2
-
 from app.database import get_connection
-
 logger = logging.getLogger(__name__)
 
 
-# -----------------------------------------------------------------------------
-# SEED WEATHER SOURCES
-# -----------------------------------------------------------------------------
 def seed_weather_sources(conn):
     sources = [
         ("NOAA", "National Oceanic and Atmospheric Administration"),
@@ -28,9 +23,6 @@ def seed_weather_sources(conn):
     logger.info("Weather sources seeded successfully.")
 
 
-# -----------------------------------------------------------------------------
-# SEED AIRPORTS
-# -----------------------------------------------------------------------------
 def seed_airports(conn):
     airports = [
         ("KJFK", "JFK", "John F. Kennedy International Airport", "New York", "USA", 40.6413, -73.7781),
@@ -60,9 +52,6 @@ def seed_airports(conn):
     logger.info("Airports seeded successfully.")
 
 
-# -----------------------------------------------------------------------------
-# RUN SEED PIPELINE
-# -----------------------------------------------------------------------------
 def run_seed():
     logger.info("Starting master data seeding...")
 
@@ -88,9 +77,6 @@ def run_seed():
             conn.close()
 
 
-# -----------------------------------------------------------------------------
-# ENTRY POINT
-# -----------------------------------------------------------------------------
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
     run_seed()
