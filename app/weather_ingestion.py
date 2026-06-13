@@ -51,10 +51,8 @@ def get_source_id(conn, source_name="OpenWeather"):
 
 
 def insert_weather(conn, airport_id, source_id, data):
-    # Event time (REAL WORLD OBSERVATION TIME)
     observed_at = datetime.fromtimestamp(data["dt"], tz=timezone.utc)
 
-    # Transformations (canonical aviation units)
     temperature_c = data["main"]["temp"]
 
     wind_speed_knots = data["wind"]["speed"] * 1.94384
@@ -122,7 +120,7 @@ def run_ingestion():
             conn.close()
 
 
-# ENTRY POINT
+
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
     run_ingestion()
