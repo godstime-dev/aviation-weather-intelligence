@@ -1,4 +1,6 @@
+-- ============================================================================
 -- 1. DIMENSION TABLES
+-- ============================================================================
 
 -- Dimension: Airports
 CREATE TABLE IF NOT EXISTS dim_airport (
@@ -21,8 +23,9 @@ CREATE TABLE IF NOT EXISTS dim_weather_source (
     is_active BOOLEAN DEFAULT TRUE
 );
 
-
+-- ============================================================================
 -- 2. FACT TABLES
+-- ============================================================================
 
 -- Fact: Weather Observations (METAR / Ground Truth)
 CREATE TABLE IF NOT EXISTS fact_weather_observations (
@@ -31,17 +34,34 @@ CREATE TABLE IF NOT EXISTS fact_weather_observations (
     airport_id INT REFERENCES dim_airport(airport_id),
     source_id INT REFERENCES dim_weather_source(source_id),
 
+    -- Event time (REAL WORLD OBSERVATION TIME)
     observed_at TIMESTAMP WITH TIME ZONE NOT NULL,
+
+    -- System ingestion time (PIPELINE TIME)
+    ingested_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
 
     temperature_c DECIMAL(4,1),
     wind_speed_knots DECIMAL(4,1),
-    visibility_miles DECIMAL(4,2),
-    precipitation_inches DECIMAL(4,2) DEFAULT 0.0,
-
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+    visibility_km DECIMAL(5,2),
+    precipitation_inches DECIMAL(4,2) DEFAULT 0.0
 );
 
+-- ============================================================================
+-- IMPORTANT: IDENTITY / DEDUPLICATION CONSTRAINT
+-- ============================================================================
+
+-- This enables:
+-- ON CONFLICT DO NOTHING
+-- to actually work correctly
+
+ALTER TABLE fact_weather_observations
+ADD CONSTRAINT uq_weather_observation
+UNIQUE (airport_id, source_id, observed_at);
+
+-- ============================================================================
 -- Fact: Weather Forecasts
+-- ============================================================================
+
 CREATE TABLE IF NOT EXISTS fact_weather_forecasts (
     forecast_id SERIAL PRIMARY KEY,
 
@@ -53,16 +73,19 @@ CREATE TABLE IF NOT EXISTS fact_weather_forecasts (
 
     forecast_temperature_c DECIMAL(4,1),
     forecast_wind_speed_knots DECIMAL(4,1),
-    forecast_visibility_miles DECIMAL(4,2),
+    forecast_visibility_km DECIMAL(5,2),
     forecast_precipitation_inches DECIMAL(4,2) DEFAULT 0.0,
 
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
+-- ============================================================================
 -- Fact: Flight Delays
+-- ============================================================================
+
 CREATE TABLE IF NOT EXISTS fact_flight_delays (
     delay_id SERIAL PRIMARY KEY,
-    
+
     airport_id INT REFERENCES dim_airport(airport_id),
 
     airline TEXT NOT NULL,
@@ -76,8 +99,9 @@ CREATE TABLE IF NOT EXISTS fact_flight_delays (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
-
+-- ============================================================================
 -- 3. PERFORMANCE INDEXES
+-- ============================================================================
 
 CREATE INDEX IF NOT EXISTS idx_obs_airport_time
     ON fact_weather_observations(airport_id, observed_at);
