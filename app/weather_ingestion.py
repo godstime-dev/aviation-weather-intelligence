@@ -34,16 +34,12 @@ def fetch_weather(lat, lon):
         "units": "metric"
         }
 
-    response = requests.get(
-        BASE_URL,
-        params=params,
-        timeout=10
-        )
-
+    response = requests.get(BASE_URL, params=params, timeout=10)
     response.raise_for_status()
     return response.json()
 
 
+# DIMENSION LOOKUPS
 def get_airports(conn):
     with conn.cursor() as cursor:
         cursor.execute("""
@@ -64,29 +60,17 @@ def get_source_id(conn, source_name="OpenWeather"):
         result = cursor.fetchone()
 
         if not result:
-            raise ValueError(
-                f"Source '{source_name}' not found in dim_weather_source."
-                )
+            raise ValueError(f"Source '{source_name}' not found.")
 
         return result[0]
 
 
 def insert_weather(conn, airport_id, source_id, data):
-    observed_at = datetime.fromtimestamp(
-        data["dt"],
-        tz=timezone.utc
-        )
+    observed_at = datetime.fromtimestamp(data["dt"], tz=timezone.utc)
 
     temperature_c = data["main"]["temp"]
-
-    wind_speed_knots = (
-        data["wind"]["speed"] * 1.94384
-        )
-
-    visibility_km = (
-        data.get("visibility", 10000) / 1000
-        )
-
+    wind_speed_knots = data["wind"]["speed"] * 1.94384
+    visibility_km = data.get("visibility", 10000) / 1000
     precipitation_inches = 0.0
 
     with conn.cursor() as cursor:
@@ -98,74 +82,134 @@ def insert_weather(conn, airport_id, source_id, data):
                 temperature_c,
                 wind_speed_knots,
                 visibility_km,
-                precipitation_inches)
+                precipitation_inches
+                       )
             VALUES (%s, %s, %s, %s, %s, %s, %s)
             ON CONFLICT (
                 airport_id,
                 source_id,
                 observed_at
             ) DO NOTHING;
-        """, (
+                       """, (
             airport_id,
             source_id,
             observed_at,
             temperature_c,
             wind_speed_knots,
             visibility_km,
-            precipitation_inches)
-            )
+            precipitation_inches
+            ))
+
+        return cursor.rowcount
+
+
+def log_start_run(conn, pipeline_name):
+    with conn.cursor() as cursor:
+        cursor.execute("""
+            INSERT INTO pipeline_runs (pipeline_name, status)
+            VALUES (%s, 'RUNNING')
+            RETURNING run_id;
+                       """, (pipeline_name,))
+        return cursor.fetchone()[0]
+
+
+def log_end_run(conn, run_id, status, processed=0, inserted=0, skipped=0, error_message=None):
+    with conn.cursor() as cursor:
+        cursor.execute("""
+            UPDATE pipeline_runs
+            SET status = %s,
+                finished_at = CURRENT_TIMESTAMP,
+                records_processed = %s,
+                records_inserted = %s,
+                records_skipped = %s,
+                error_message = %s
+            WHERE run_id = %s;
+                       """, (
+            status,
+            processed,
+            inserted,
+            skipped,
+            error_message,
+            run_id
+            ))
 
 
 def run_ingestion():
     logger.info("Starting weather ingestion pipeline...")
 
     conn = None
+    run_id = None
+
+    metrics = {
+        "processed": 0,
+        "inserted": 0,
+        "skipped": 0
+        }
+
     try:
         conn = get_connection()
 
-        airports = get_airports(conn)
+        run_id = log_start_run(conn, "weather_ingestion")
+        conn.commit()
 
-        source_id = get_source_id(
-            conn,
-            "OpenWeather"
-            )
+        airports = get_airports(conn)
+        source_id = get_source_id(conn, "OpenWeather")
 
         for airport_id, lat, lon in airports:
+            metrics["processed"] += 1
+
             try:
                 data = fetch_weather(lat, lon)
 
-                insert_weather(
-                    conn,
-                    airport_id,
-                    source_id,
-                    data
-                    )
+                result = insert_weather(conn, airport_id, source_id, data)
 
-                logger.info(
-                    f"Processed airport_id={airport_id}"
-                    )
+                if result == 1:
+                    metrics["inserted"] += 1
+                else:
+                    metrics["skipped"] += 1
 
-            except Exception as error:
-                logger.error(
-                    f"Failed for airport_id={airport_id}: {error}"
-                    )
+                logger.info(f"Processed airport_id={airport_id}")
+
+            except Exception as e:
+                metrics["skipped"] += 1
+                logger.error(f"Failed airport_id={airport_id}: {e}")
 
         conn.commit()
 
-        logger.info(
-            "Weather ingestion completed successfully."
+        log_end_run(
+            conn,
+            run_id,
+            "SUCCESS",
+            metrics["processed"],
+            metrics["inserted"],
+            metrics["skipped"],
+            None
             )
+        conn.commit()
 
-    except psycopg2.Error as error:
+        logger.info("Weather ingestion completed successfully.")
+
+    except Exception as e:
+        logger.error(f"Pipeline failed: {e}")
+
         if conn:
             conn.rollback()
 
-        logger.error(
-            f"Pipeline failed: {error}"
-            )
-
+            if run_id:
+                try:
+                    log_end_run(
+                        conn,
+                        run_id,
+                        "FAILED",
+                        metrics["processed"],
+                        metrics["inserted"],
+                        metrics["skipped"],
+                        str(e)
+                        )
+                    conn.commit()
+                except Exception as log_err:
+                    logger.critical(f"Failed to log pipeline failure: {log_err}")
         raise
-
     finally:
         if conn:
             conn.close()
