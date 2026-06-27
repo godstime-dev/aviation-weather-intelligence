@@ -2,9 +2,9 @@
 
 CREATE TABLE IF NOT EXISTS dim_airport (
     airport_id SERIAL PRIMARY KEY,
-    airport_icao VARCHAR(4) UNIQUE NOT NULL,
+    airport_icao VARCHAR(4) UNIQUE,
     iata_code VARCHAR(3) UNIQUE NOT NULL,
-    name TEXT NOT NULL,
+    name TEXT,
     city TEXT,
     country TEXT,
     latitude DECIMAL(9,6),
@@ -18,6 +18,7 @@ CREATE TABLE IF NOT EXISTS dim_weather_source (
     description TEXT,
     is_active BOOLEAN DEFAULT TRUE
     );
+
 
 -- FACT TABLES
 
@@ -58,18 +59,28 @@ CREATE TABLE IF NOT EXISTS fact_weather_forecasts (
 CREATE TABLE IF NOT EXISTS fact_flight_delays (
     delay_id SERIAL PRIMARY KEY,
 
-    airport_id INT REFERENCES dim_airport(airport_id),
+    flight_date DATE NOT NULL,
 
-    airline TEXT NOT NULL,
-    flight_number TEXT NOT NULL,
+    airline VARCHAR(20) NOT NULL,
+    flight_number VARCHAR(20) NOT NULL,
 
-    scheduled_departure TIMESTAMP WITH TIME ZONE NOT NULL,
-    actual_departure TIMESTAMP WITH TIME ZONE,
+    origin_airport_id INT REFERENCES dim_airport(airport_id),
+    dest_airport_id INT REFERENCES dim_airport(airport_id),
 
-    delay_minutes INT DEFAULT 0,
+    scheduled_departure TIMESTAMP,
+    actual_departure TIMESTAMP,
 
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
-    );
+    delay_minutes DECIMAL(8,2) DEFAULT 0,
+
+    cancelled BOOLEAN DEFAULT FALSE,
+    cancellation_code VARCHAR(10),
+
+    weather_delay_minutes DECIMAL(8,2) DEFAULT 0,
+    nas_delay_minutes DECIMAL(8,2) DEFAULT 0,
+
+    created_at TIMESTAMP WITH TIME ZONE
+        DEFAULT CURRENT_TIMESTAMP
+        );
 
 -- INDEXES
 
@@ -79,8 +90,14 @@ CREATE INDEX IF NOT EXISTS idx_obs_airport_time
 CREATE INDEX IF NOT EXISTS idx_fc_target_time
     ON fact_weather_forecasts(airport_id, forecast_for);
 
-CREATE INDEX IF NOT EXISTS idx_flights_time
-    ON fact_flight_delays(airport_id, scheduled_departure);
+CREATE INDEX IF NOT EXISTS idx_flight_date
+    ON fact_flight_delays(flight_date);
+
+CREATE INDEX IF NOT EXISTS idx_origin_dest
+    ON fact_flight_delays(origin_airport_id, dest_airport_id);
+
+CREATE INDEX IF NOT EXISTS idx_airline
+    ON fact_flight_delays(airline);
 
 -- PIPELINE RUN TRACKING
 
