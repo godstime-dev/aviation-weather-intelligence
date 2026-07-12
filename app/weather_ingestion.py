@@ -48,7 +48,9 @@ def get_airports(conn):
     with conn.cursor() as cursor:
         cursor.execute("""
             SELECT airport_id, latitude, longitude
-            FROM dim_airport;
+            FROM dim_airport
+            WHERE latitude IS NOT NULL
+            AND longitude IS NOT NULL;
                        """)
         return cursor.fetchall()
 
