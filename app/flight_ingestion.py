@@ -132,7 +132,15 @@ def insert_facts(conn, records):
                 nas_delay_minutes
                 )
             VALUES %s
-                """, records, page_size=10000)
+            ON CONFLICT (
+                flight_date,
+                airline,
+                flight_number,
+                origin_airport_id,
+                dest_airport_id,
+                scheduled_departure
+                       ) DO NOTHING
+                """, records, page_size=10000,)
 
     return len(records)
 
