@@ -82,6 +82,17 @@ CREATE TABLE IF NOT EXISTS fact_flight_delays (
         DEFAULT CURRENT_TIMESTAMP
         );
 
+ALTER TABLE fact_flight_delays
+ADD CONSTRAINT uq_flight_delay
+UNIQUE (
+    flight_date,
+    airline,
+    flight_number,
+    origin_airport_id,
+    dest_airport_id,
+    scheduled_departure
+    );
+
 -- INDEXES
 
 CREATE INDEX IF NOT EXISTS idx_obs_airport_time
