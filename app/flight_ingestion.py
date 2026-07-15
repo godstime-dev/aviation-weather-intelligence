@@ -4,10 +4,13 @@ import pandas as pd
 from psycopg2.extras import execute_values
 from app.database import get_connection
 from app.pipeline_utils import log_start_run, log_end_run
+from itertools import islice
 
 logger = logging.getLogger(__name__)
 
 CSV_FILE = "data/T_ONTIME_REPORTING.csv"
+
+BATCH_SIZE = 10_000
 
 def load_dataset():
     logger.info("Loading BTS flight dataset...")
@@ -112,37 +115,53 @@ def transform(df, airport_map):
     logger.info(f"Transformed {len(records):,} valid records")
     return records
 
+def chunked(iterable, size):
+    """Yield successive chunks from an iterable."""
+    iterator = iter(iterable)
+
+    while True:
+        batch = list(islice(iterator, size))
+        if not batch:
+            break
+        yield batch
+
 def insert_facts(conn, records):
     logger.info("Inserting fact_flight_delays...")
 
-    with conn.cursor() as cursor:
-        execute_values(cursor, """
-            INSERT INTO fact_flight_delays (
-                flight_date,
-                airline,
-                flight_number,
-                origin_airport_id,
-                dest_airport_id,
-                scheduled_departure,
-                actual_departure,
-                delay_minutes,
-                cancelled,
-                cancellation_code,
-                weather_delay_minutes,
-                nas_delay_minutes
-                )
-            VALUES %s
-            ON CONFLICT (
-                flight_date,
-                airline,
-                flight_number,
-                origin_airport_id,
-                dest_airport_id,
-                scheduled_departure
-                       ) DO NOTHING
-                """, records, page_size=10000,)
+    if not records:
+        logger.warning("No records to insert.")
+        return 0
+    
+    inserted = 0
 
-    return len(records)
+    with conn.cursor() as cursor:
+        for batch in chunked(records, BATCH_SIZE):
+            execute_values(cursor, """
+                INSERT INTO fact_flight_delays (
+                    flight_date,
+                    airline,
+                    flight_number,
+                    origin_airport_id,
+                    dest_airport_id,
+                    scheduled_departure,
+                    actual_departure,
+                    delay_minutes,
+                    cancelled,
+                    cancellation_code,
+                    weather_delay_minutes,
+                    nas_delay_minutes
+                           )
+                VALUES %s
+                ON CONFLICT ON CONSTRAINT uq_flight_delay
+                DO NOTHING
+                RETURNING delay_id;
+                """, batch)
+            
+            inserted += len(cursor.fetchall())
+
+    logger.info(f"Inserted {inserted:,} new flight records.")
+
+    return inserted
 
 def run_ingestion():
     logger.info("Starting flight delay ingestion pipeline...")
@@ -170,9 +189,9 @@ def run_ingestion():
 
         inserted = insert_facts(conn, records)
 
-        metrics["processed"] = len(df)
+        metrics["processed"] = len(records)
         metrics["inserted"] = inserted
-        metrics["skipped"] = len(df) - inserted
+        metrics["skipped"] = len(records) - inserted
 
         conn.commit()
 
