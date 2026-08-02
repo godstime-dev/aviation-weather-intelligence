@@ -25,36 +25,76 @@ CREATE TABLE IF NOT EXISTS dim_weather_source (
 CREATE TABLE IF NOT EXISTS fact_weather_observations (
     observation_id SERIAL PRIMARY KEY,
 
-    airport_id INT NOT NULL REFERENCES dim_airport(airport_id),
-    source_id INT NOT NULL REFERENCES dim_weather_source(source_id),
+    airport_id INT NOT NULL
+        REFERENCES dim_airport(airport_id),
+
+    source_id INT NOT NULL
+        REFERENCES dim_weather_source(source_id),
 
     observed_at TIMESTAMP WITH TIME ZONE NOT NULL,
-    ingested_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    ingested_at TIMESTAMP WITH TIME ZONE
+        DEFAULT CURRENT_TIMESTAMP,
 
+    -- Temperature
     temperature_c DECIMAL(4,1),
-    wind_speed_knots DECIMAL(4,1),
-    visibility_km DECIMAL(5,2),
-    precipitation_inches DECIMAL(4,2) DEFAULT 0.0,
+    dew_point_c DECIMAL(4,1),
 
-    UNIQUE (airport_id, source_id, observed_at)
-    );
+    -- Humidity
+    relative_humidity DECIMAL(5,2),
+
+    -- Pressure
+    pressure_hpa DECIMAL(6,1),
+
+    -- Wind
+    wind_speed_knots DECIMAL(5,2),
+    wind_direction_deg SMALLINT,
+    wind_gust_knots DECIMAL(5,2),
+
+    -- Visibility & precipitation
+    visibility_km DECIMAL(6,2),
+    precipitation_mm DECIMAL(6,2) DEFAULT 0,
+
+    -- Weather conditions
+    weather_code SMALLINT,
+
+    UNIQUE (
+        airport_id,
+        source_id,
+        observed_at
+        )
+        );
 
 CREATE TABLE IF NOT EXISTS fact_weather_forecasts (
     forecast_id SERIAL PRIMARY KEY,
 
-    airport_id INT REFERENCES dim_airport(airport_id),
-    source_id INT REFERENCES dim_weather_source(source_id),
+    airport_id INT NOT NULL REFERENCES dim_airport(airport_id),
+    source_id INT NOT NULL REFERENCES dim_weather_source(source_id),
 
     issued_at TIMESTAMP WITH TIME ZONE NOT NULL,
     forecast_for TIMESTAMP WITH TIME ZONE NOT NULL,
 
     forecast_temperature_c DECIMAL(4,1),
-    forecast_wind_speed_knots DECIMAL(4,1),
-    forecast_visibility_km DECIMAL(5,2),
-    forecast_precipitation_inches DECIMAL(4,2) DEFAULT 0.0,
+    forecast_dew_point_c DECIMAL(4,1),
+    forecast_relative_humidity DECIMAL(5,2),
+    forecast_pressure_hpa DECIMAL(6,1),
+    
+    forecast_wind_speed_knots DECIMAL(5,2),
+    forecast_wind_direction_deg SMALLINT,
+    forecast_wind_gust_knots DECIMAL(5,2),
+    
+    forecast_visibility_km DECIMAL(6,2),
+    forecast_precipitation_mm DECIMAL(6,2) DEFAULT 0,
+    
+    forecast_weather_code SMALLINT,
 
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
-    );
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT uq_weather_forecast UNIQUE (
+        airport_id,
+        source_id,
+        forecast_for
+        )
+        );
 
 CREATE TABLE IF NOT EXISTS fact_flight_delays (
     delay_id SERIAL PRIMARY KEY,
@@ -64,8 +104,8 @@ CREATE TABLE IF NOT EXISTS fact_flight_delays (
     airline VARCHAR(20) NOT NULL,
     flight_number VARCHAR(20) NOT NULL,
 
-    origin_airport_id INT REFERENCES dim_airport(airport_id),
-    dest_airport_id INT REFERENCES dim_airport(airport_id),
+    origin_airport_id INT NOT NULL REFERENCES dim_airport(airport_id),
+    dest_airport_id INT NOT NULL REFERENCES dim_airport(airport_id),
 
     scheduled_departure TIMESTAMP,
     actual_departure TIMESTAMP,
