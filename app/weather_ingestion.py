@@ -174,6 +174,16 @@ def normalize_weather(df):
 
     return weather
 
+def to_float(value):
+    if pd.isna(value):
+        return None
+    return float(value)
+
+
+def to_int(value):
+    if pd.isna(value):
+        return None
+    return int(value)
 
 def transform_weather(airport_id, source_id, weather_df):
     """
@@ -193,16 +203,16 @@ def transform_weather(airport_id, source_id, weather_df):
             airport_id,
             source_id,
             row.observed_at,
-            row.temperature_c,
-            row.dew_point_c,
-            row.relative_humidity,
-            row.pressure_hpa,
-            row.wind_speed_knots,
-            row.wind_direction_deg,
-            row.wind_gust_knots,
-            row.visibility_km,
-            row.precipitation_mm,
-            row.weather_code
+            to_float(row.temperature_c),
+            to_float(row.dew_point_c),
+            to_float(row.relative_humidity),
+            to_float(row.pressure_hpa),
+            to_float(row.wind_speed_knots),
+            to_int(row.wind_direction_deg),
+            to_float(row.wind_gust_knots),
+            to_float(row.visibility_km),
+            to_float(row.precipitation_mm),
+            to_int(row.weather_code),
             ))
 
     return records
