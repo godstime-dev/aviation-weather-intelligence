@@ -34,7 +34,7 @@ def seed_airports(conn):
             "Nigeria",
             5.6052,
             8.0930,
-            "65271"
+            "DNAI0"
             ),
         (
             "DNAA",
