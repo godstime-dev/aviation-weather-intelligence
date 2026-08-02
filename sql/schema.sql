@@ -4,6 +4,7 @@ CREATE TABLE IF NOT EXISTS dim_airport (
     airport_id SERIAL PRIMARY KEY,
     airport_icao VARCHAR(4) UNIQUE,
     iata_code VARCHAR(3) UNIQUE NOT NULL,
+    meteostat_station_id VARCHAR(20),
     name TEXT,
     city TEXT,
     country TEXT,
