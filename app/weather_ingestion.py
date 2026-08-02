@@ -30,14 +30,14 @@ def get_source_id(conn):
             SELECT source_id
             FROM dim_weather_source
             WHERE source_name = 'Meteostat';
-        """)
+            """)
 
         row = cursor.fetchone()
 
     if row is None:
         raise ValueError(
             "Meteostat weather source not found. Run seed.py first."
-        )
+            )
 
     return row[0]
 
@@ -57,7 +57,7 @@ def get_airports(conn):
             FROM dim_airport
             WHERE meteostat_station_id IS NOT NULL
             ORDER BY airport_id;
-        """)
+            """)
 
         return cursor.fetchall()
 
@@ -74,7 +74,7 @@ def fetch_weather(station_id):
         station_id,
         START_DATE,
         END_DATE
-    )
+        )
 
     # Allow Meteostat to interpolate missing observations
     data.model = True
@@ -84,7 +84,7 @@ def fetch_weather(station_id):
     if df.empty:
         logger.warning(
             f"No historical weather found for station {station_id}"
-        )
+            )
         return pd.DataFrame()
 
     # Modern Meteostat mixes strings with Parameter enums.
@@ -92,14 +92,14 @@ def fetch_weather(station_id):
     df.columns = [
         column.value if hasattr(column, "value") else column
         for column in df.columns
-    ]
+        ]
 
     df = df.reset_index()
 
     logger.info(
         f"Retrieved {len(df):,} hourly observations "
         f"for station {station_id}"
-    )
+        )
 
     return df
 
@@ -127,59 +127,50 @@ def normalize_weather(df):
     weather["observed_at"] = df["time"]
 
     # Temperature
-    weather["temperature_c"] = (
-        df["temp"] if "temp" in df.columns else None
-    )
+    weather["temperature_c"] = (df["temp"] if "temp" in df.columns else None)
 
-    weather["dew_point_c"] = (
-        df["dwpt"] if "dwpt" in df.columns else None
-    )
+
+    weather["dew_point_c"] = (df["dwpt"] if "dwpt" in df.columns else None)
+
 
     # Humidity
-    weather["relative_humidity"] = (
-        df["rhum"] if "rhum" in df.columns else None
-    )
+    weather["relative_humidity"] = (df["rhum"] if "rhum" in df.columns else None)
+
 
     # Pressure
-    weather["pressure_hpa"] = (
-        df["pres"] if "pres" in df.columns else None
-    )
+    weather["pressure_hpa"] = (df["pres"] if "pres" in df.columns else None)
+
 
     # Wind
     weather["wind_speed_knots"] = (
         df["wspd"].apply(kmh_to_knots)
         if "wspd" in df.columns
         else None
-    )
+        )
 
-    weather["wind_direction_deg"] = (
-        df["wdir"] if "wdir" in df.columns else None
-    )
+    weather["wind_direction_deg"] = (df["wdir"] if "wdir" in df.columns else None)
+
 
     weather["wind_gust_knots"] = (
         df["wpgt"].apply(kmh_to_knots)
         if "wpgt" in df.columns
         else None
-    )
+        )
 
     # Visibility
     # Meteostat rarely provides historical visibility.
     # Store NULL when unavailable instead of inventing values.
-    weather["visibility_km"] = (
-        df["vsby"] if "vsby" in df.columns else None
-    )
+    weather["visibility_km"] = (df["vsby"] if "vsby" in df.columns else None)
 
     # Precipitation
     weather["precipitation_mm"] = (
         df["prcp"].fillna(0)
         if "prcp" in df.columns
         else 0
-    )
+        )
 
     # Weather condition code
-    weather["weather_code"] = (
-        df["coco"] if "coco" in df.columns else None
-    )
+    weather["weather_code"] = (df["coco"] if "coco" in df.columns else None)
 
     return weather
 
@@ -212,7 +203,7 @@ def transform_weather(airport_id, source_id, weather_df):
             row.visibility_km,
             row.precipitation_mm,
             row.weather_code
-        ))
+            ))
 
     return records
 
@@ -252,7 +243,6 @@ def insert_weather(conn, records):
                 cursor,
                 """
                 INSERT INTO fact_weather_observations (
-
                     airport_id,
                     source_id,
                     observed_at,
@@ -269,23 +259,19 @@ def insert_weather(conn, records):
                     visibility_km,
                     precipitation_mm,
                     weather_code
-
                 )
-
                 VALUES %s
-
                 ON CONFLICT (
                     airport_id,
                     source_id,
                     observed_at
-                )
-
+                    )
                 DO NOTHING
 
                 RETURNING observation_id;
                 """,
                 batch
-            )
+                )
 
             inserted += len(cursor.fetchall())
 
@@ -294,9 +280,7 @@ def insert_weather(conn, records):
 
 def run_ingestion():
 
-    logger.info(
-        "Starting historical weather ingestion pipeline..."
-    )
+    logger.info("Starting historical weather ingestion pipeline...")
 
     conn = None
     run_id = None
@@ -305,7 +289,7 @@ def run_ingestion():
         "processed": 0,
         "inserted": 0,
         "skipped": 0
-    }
+        }
 
     try:
 
@@ -314,7 +298,7 @@ def run_ingestion():
         run_id = log_start_run(
             conn,
             "weather_ingestion"
-        )
+            )
 
         conn.commit()
 
@@ -322,23 +306,17 @@ def run_ingestion():
 
         airports = get_airports(conn)
 
-        logger.info(
-            f"Found {len(airports)} airports."
-        )
+        logger.info(f"Found {len(airports)} airports.")
 
         for airport_id, iata_code, station_id in airports:
 
-            logger.info(
-                f"Processing {iata_code} ({station_id})..."
-            )
+            logger.info(f"Processing {iata_code} ({station_id})...")
 
             weather_df = fetch_weather(station_id)
 
             if weather_df.empty:
 
-                logger.warning(
-                    f"No weather found for {iata_code}"
-                )
+                logger.warning(f"No weather found for {iata_code}")
 
                 continue
 
@@ -346,12 +324,12 @@ def run_ingestion():
                 airport_id,
                 source_id,
                 weather_df
-            )
+                )
 
             inserted = insert_weather(
                 conn,
                 records
-            )
+                )
 
             processed = len(records)
             skipped = processed - inserted
@@ -364,7 +342,7 @@ def run_ingestion():
                 f"{iata_code}: "
                 f"{inserted:,} inserted, "
                 f"{skipped:,} skipped"
-            )
+                )
 
         conn.commit()
 
@@ -376,31 +354,21 @@ def run_ingestion():
             metrics["inserted"],
             metrics["skipped"],
             None
-        )
+            )
 
         conn.commit()
 
-        logger.info(
-            "Historical weather ingestion completed successfully."
-        )
+        logger.info("Historical weather ingestion completed successfully.")
 
-        logger.info(
-            f"Processed : {metrics['processed']:,}"
-        )
+        logger.info(f"Processed : {metrics['processed']:,}")
 
-        logger.info(
-            f"Inserted : {metrics['inserted']:,}"
-        )
+        logger.info(f"Inserted : {metrics['inserted']:,}")
 
-        logger.info(
-            f"Skipped : {metrics['skipped']:,}"
-        )
+        logger.info(f"Skipped : {metrics['skipped']:,}")
 
     except Exception as e:
 
-        logger.error(
-            f"Pipeline failed: {e}"
-        )
+        logger.error(f"Pipeline failed: {e}")
 
         if conn:
 
@@ -418,7 +386,7 @@ def run_ingestion():
                         metrics["inserted"],
                         metrics["skipped"],
                         str(e)
-                    )
+                        )
 
                     conn.commit()
 
@@ -426,7 +394,7 @@ def run_ingestion():
 
                     logger.critical(
                         f"Unable to log pipeline failure: {log_error}"
-                    )
+                        )
 
         raise
 
@@ -440,6 +408,6 @@ if __name__ == "__main__":
 
     logging.basicConfig(
         level=logging.INFO
-    )
+        )
 
     run_ingestion()
